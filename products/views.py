@@ -165,17 +165,22 @@ def customize(request):
 def download_customization(request, request_id):
     """Download a single customized product"""
     try:
-        customization = CustomizationRequest.objects.get(id=request_id)
+        customization = CustomizationRequest.objects.select_related(
+            'product_view__product'
+        ).get(id=request_id)
     except CustomizationRequest.DoesNotExist:
         return JsonResponse({'error': 'Customization not found'}, status=404)
 
     if not customization.result_image:
         return JsonResponse({'error': 'Result image not ready'}, status=400)
 
-    file_path = customization.result_image.path
     filename = f"{customization.product_view.product.name}_{customization.product_view.angle}.png"
-    
-    response = FileResponse(open(file_path, 'rb'), content_type='image/png')
+
+    # FileResponse accepts an open file and closes it automatically.
+    response = FileResponse(
+        open(customization.result_image.path, 'rb'),
+        content_type='image/png',
+    )
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
@@ -196,7 +201,9 @@ def download_batch(request):
         return JsonResponse({'error': 'request_ids required'}, status=400)
 
     # Fetch all customizations
-    customizations = CustomizationRequest.objects.filter(id__in=request_ids)
+    customizations = CustomizationRequest.objects.select_related(
+        'product_view__product'
+    ).filter(id__in=request_ids)
     
     if not customizations.exists():
         return JsonResponse({'error': 'No customizations found'}, status=404)

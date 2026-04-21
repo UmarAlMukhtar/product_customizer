@@ -23,4 +23,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('products.urls')),
     path('api/', include('products.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]
+
+# Serve uploaded media. On Render the persistent disk holds media files and
+# there is no separate CDN, so Django must serve them in all environments.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

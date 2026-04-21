@@ -744,13 +744,26 @@ body {
 }
 
 #modal-save-btn {
+    flex: 1;
+    padding: 0.65rem;
     background: linear-gradient(120deg, var(--accent), var(--accent-strong));
     color: #fff;
     border: 0;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 200ms ease;
 }
 
-#modal-save-btn:hover {
+#modal-save-btn:hover:not(:disabled) {
     box-shadow: 0 6px 16px rgba(218, 90, 31, 0.25);
+    transform: translateY(-1px);
+}
+
+#modal-save-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
 }
 
 .add-product-modal-content {
@@ -807,14 +820,27 @@ body {
 }
 
 #add-product-submit-btn {
+    flex: 1;
+    padding: 0.65rem;
     background: linear-gradient(120deg, var(--accent), var(--accent-strong));
     color: #fff;
     border: 0;
+    border-radius: 10px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 200ms ease;
+}
+
+#add-product-submit-btn:hover:not(:disabled) {
+    box-shadow: 0 6px 16px rgba(218, 90, 31, 0.25);
+    transform: translateY(-1px);
 }
 
 #add-product-submit-btn:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+    transform: none;
 }
 
 /* RESPONSIVE */

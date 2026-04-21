@@ -113,3 +113,7 @@ staticfiles/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Debug / test artifacts
+debug_output.png
+test_logo*.png
