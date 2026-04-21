@@ -1,0 +1,247 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Design It. - Product Customizer</title>
+    <link rel="stylesheet" href="{% static 'products/css/app.css' %}" />
+  </head>
+  <body>
+    <div class="ambient ambient-a" aria-hidden="true"></div>
+    <div class="ambient ambient-b" aria-hidden="true"></div>
+
+    <!-- STEP 1: DESIGN UPLOAD -->
+    <div id="upload-step" class="step-container step-active">
+      <main class="upload-section">
+        <div class="upload-header">
+          <p class="eyebrow">Django + Image Processing</p>
+          <h1>Design It.</h1>
+          <p class="subtitle">
+            Upload your logo to generate customized products instantly.
+          </p>
+          <div
+            class="color-toggle"
+            role="radiogroup"
+            aria-label="Catalog color"
+          >
+            <label class="color-toggle-option">
+              <input
+                type="radio"
+                name="product-color"
+                value="#ffffff"
+                checked
+              />
+              <span>White</span>
+            </label>
+            <label class="color-toggle-option">
+              <input type="radio" name="product-color" value="#000000" />
+              <span>Black</span>
+            </label>
+          </div>
+        </div>
+
+        <form id="upload-form" class="upload-form">
+          <label class="upload-zone" id="upload-zone" for="design-input">
+            <svg
+              class="upload-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <h2>Drop your design here or click to browse</h2>
+            <p class="upload-hint">PNG or JPG, any size</p>
+          </label>
+          <input
+            id="design-input"
+            class="file-input-hidden"
+            type="file"
+            accept="image/png,image/jpeg"
+            required
+          />
+          <button id="upload-btn" type="submit" disabled>
+            Select a design to generate
+          </button>
+        </form>
+      </main>
+    </div>
+
+    <!-- STEP 2: CATALOG VIEW -->
+    <div id="catalog-step" class="step-container">
+      <header class="catalog-header">
+        <div class="header-content">
+          <button id="back-btn" class="back-btn" title="Upload new design">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            New Design
+          </button>
+          <h1>Your Catalog</h1>
+          <div class="header-actions">
+            <button
+              id="add-product-btn"
+              class="add-product-btn"
+              type="button"
+              disabled
+            >
+              + Add Product
+            </button>
+            <label class="select-all-label">
+              <input id="select-all-checkbox" type="checkbox" />
+              <span>Select All</span>
+            </label>
+            <button id="download-batch-btn" class="download-batch-btn" disabled>
+              Download Selected
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="catalog-container">
+        <div id="catalog-grid" class="catalog-grid"></div>
+      </main>
+    </div>
+
+    <!-- EDIT MODAL -->
+    <div id="edit-modal" class="modal">
+      <div class="modal-content">
+        <button class="modal-close" id="close-modal-btn">&times;</button>
+        <h2>Edit Product</h2>
+
+        <div class="modal-body">
+          <div class="modal-preview">
+            <div class="modal-preview-stage">
+              <img id="modal-base-img" alt="Base product preview" />
+              <img id="modal-design-overlay" alt="Design preview" />
+            </div>
+          </div>
+
+          <form id="edit-form" class="edit-form">
+            <div class="transform-section">
+              <label for="modal-move-x"
+                >Move X <span id="modal-move-x-value">0px</span></label
+              >
+              <input
+                id="modal-move-x"
+                type="range"
+                min="-120"
+                max="120"
+                value="0"
+              />
+
+              <label for="modal-move-y"
+                >Move Y <span id="modal-move-y-value">0px</span></label
+              >
+              <input
+                id="modal-move-y"
+                type="range"
+                min="-120"
+                max="120"
+                value="0"
+              />
+
+              <label for="modal-scale"
+                >Scale <span id="modal-scale-value">100%</span></label
+              >
+              <input
+                id="modal-scale"
+                type="range"
+                min="30"
+                max="200"
+                value="100"
+              />
+
+              <label for="modal-rotation"
+                >Rotation <span id="modal-rotation-value">0°</span></label
+              >
+              <input
+                id="modal-rotation"
+                type="range"
+                min="-180"
+                max="180"
+                value="0"
+              />
+
+              <button type="button" id="modal-reset-btn" class="secondary-btn">
+                Reset
+              </button>
+            </div>
+
+            <div
+              class="color-toggle"
+              role="radiogroup"
+              aria-label="Product color"
+            >
+              <label class="color-toggle-option">
+                <input
+                  type="radio"
+                  name="modal-product-color"
+                  value="#ffffff"
+                />
+                <span>White</span>
+              </label>
+              <label class="color-toggle-option">
+                <input
+                  type="radio"
+                  name="modal-product-color"
+                  value="#000000"
+                />
+                <span>Black</span>
+              </label>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="secondary-btn" id="modal-cancel-btn">
+                Cancel
+              </button>
+              <button type="submit" id="modal-save-btn">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD PRODUCT MODAL -->
+    <div id="add-product-modal" class="modal">
+      <div class="modal-content add-product-modal-content">
+        <button class="modal-close" id="close-add-product-modal-btn">
+          &times;
+        </button>
+        <h2>Add Product</h2>
+        <form id="add-product-form" class="add-product-form">
+          <label for="add-product-select">Choose a product view</label>
+          <select id="add-product-select" required></select>
+          <label for="add-product-color-select">Choose color</label>
+          <select id="add-product-color-select" required></select>
+          <label for="add-product-angle-select">Choose angle</label>
+          <select id="add-product-angle-select" required></select>
+          <p id="add-product-empty-state" class="add-product-empty-state"></p>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="secondary-btn"
+              id="add-product-cancel-btn"
+            >
+              Cancel
+            </button>
+            <button type="submit" id="add-product-submit-btn">
+              Add Product
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="{% static 'products/js/app.js' %}"></script>
+  </body>
+</html>
