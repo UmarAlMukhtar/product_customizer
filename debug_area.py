@@ -1,7 +1,7 @@
 from PIL import Image, ImageDraw
 
 # ---- TWEAK THESE VALUES ----
-IMAGE_PATH = r"C:\Users\Umar\code\product_customizer\media\product\sweater-black-back.jpg"
+IMAGE_PATH = "Your Image Path Here"
 X      = 130
 Y      = 120
 WIDTH  = 240

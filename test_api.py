@@ -4,7 +4,7 @@ import requests
 PRODUCT_VIEW_ID = 1
 
 # Path to any PNG/JPG image on your PC to use as the design
-DESIGN_IMAGE_PATH = r"C:\Users\Umar\code\product_customizer\test_logo.png"
+DESIGN_IMAGE_PATH = "Your Image Path Here"
 
 url = "http://127.0.0.1:8000/api/customize/"
 
