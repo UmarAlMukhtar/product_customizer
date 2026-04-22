@@ -1,11 +1,11 @@
 from PIL import Image, ImageDraw
 
 # ---- TWEAK THESE VALUES ----
-IMAGE_PATH = "Your Image Path Here"
-X      = 130
-Y      = 120
-WIDTH  = 240
-HEIGHT = 400
+IMAGE_PATH = r"C:\Users\Umar\Downloads\resized-images\cap-white-front.jpg"
+X      = 200
+Y      = 200
+WIDTH  = 350
+HEIGHT = 200
 # ----------------------------
 
 img = Image.open(IMAGE_PATH).convert('RGBA')

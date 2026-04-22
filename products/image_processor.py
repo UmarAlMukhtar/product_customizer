@@ -2,25 +2,54 @@ import cv2
 import numpy as np
 from PIL import Image
 import os
+import gc
+
+# Maximum pixel dimension for any image loaded into memory.
+# Keeps peak RAM well under Render's 512 MB free-tier limit.
+MAX_DIMENSION = 1200
+
+
+def _downscale(img, max_dim=MAX_DIMENSION):
+    """Downscale a PIL image so its largest side is at most *max_dim* pixels."""
+    w, h = img.size
+    if max(w, h) <= max_dim:
+        return img
+    ratio = max_dim / max(w, h)
+    return img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+
+
+def _downscale_cv(img, max_dim=MAX_DIMENSION):
+    """Downscale an OpenCV (numpy) image so its largest side is at most *max_dim* pixels."""
+    h, w = img.shape[:2]
+    if max(w, h) <= max_dim:
+        return img
+    ratio = max_dim / max(w, h)
+    return cv2.resize(img, (int(w * ratio), int(h * ratio)), interpolation=cv2.INTER_AREA)
+
 
 def apply_design_to_product(product_view, design_image_path, transform=None):
     transform = transform or {}
 
     # Load base product image
     base_img = cv2.imread(product_view.base_image.path)
+    original_h, original_w = base_img.shape[:2]
+    base_img = _downscale_cv(base_img)
     base_h, base_w = base_img.shape[:2]
 
     # Load user design
     design = Image.open(design_image_path).convert('RGBA')
+    design = _downscale(design)
 
     # ✅ Auto-remove white background
     design = remove_background(design)
     
-    # Get print area
-    px = product_view.print_area_x
-    py = product_view.print_area_y
-    pw = product_view.print_area_width
-    ph = product_view.print_area_height
+    # Get print area — scale coords to match the (possibly downscaled) base image
+    coord_scale = base_w / original_w if original_w != base_w else 1.0
+
+    px = int(product_view.print_area_x * coord_scale)
+    py = int(product_view.print_area_y * coord_scale)
+    pw = int(product_view.print_area_width * coord_scale)
+    ph = int(product_view.print_area_height * coord_scale)
 
     # Clamp print area to image bounds
     px = max(0, min(px, base_w - 1))
@@ -34,6 +63,7 @@ def apply_design_to_product(product_view, design_image_path, transform=None):
     new_w = int(design_w * ratio)
     new_h = int(design_h * ratio)
     design_resized = design.resize((new_w, new_h), Image.LANCZOS)
+    del design  # free original
 
     scale = max(0.2, min(float(transform.get('scale', 1.0)), 4.0))
     # CSS preview uses clockwise-positive rotation; Pillow is counterclockwise-positive.
@@ -49,6 +79,7 @@ def apply_design_to_product(product_view, design_image_path, transform=None):
     scaled_w = max(1, int(new_w * scale))
     scaled_h = max(1, int(new_h * scale))
     design_transformed = design_resized.resize((scaled_w, scaled_h), Image.LANCZOS)
+    del design_resized  # free intermediate
 
     # Rotate with transparency, preserving full bounds.
     design_transformed = design_transformed.rotate(rotation_deg, expand=True, resample=Image.BICUBIC)
@@ -63,9 +94,12 @@ def apply_design_to_product(product_view, design_image_path, transform=None):
 
     # Apply displacement map using the actual resized dimensions
     design_warped, warped_x, warped_y = apply_displacement_map(base_img, design_transformed, offset_x, offset_y)
+    del design_transformed  # free intermediate
 
     # Blend onto base
     result = blend_design_onto_base(base_img, design_warped, warped_x, warped_y)
+    del base_img, design_warped  # free large arrays
+    gc.collect()
 
     return result
 
@@ -75,7 +109,7 @@ def remove_background(design_pil):
     Works even if the image has no transparency
     """
     design = design_pil.convert('RGBA')
-    data = np.array(design).astype(np.float32)
+    data = np.array(design)  # uint8 — no float32 copy needed here
 
     r, g, b, a = data[:,:,0], data[:,:,1], data[:,:,2], data[:,:,3]
 
@@ -85,7 +119,9 @@ def remove_background(design_pil):
     # Make those pixels transparent
     data[:,:,3] = np.where(white_mask, 0, a)
 
-    return Image.fromarray(data.astype(np.uint8), 'RGBA')
+    result = Image.fromarray(data, 'RGBA')
+    del data, white_mask  # free arrays
+    return result
 
 def apply_displacement_map(base_img, design_pil, px, py):
     base_h, base_w = base_img.shape[:2]
@@ -112,19 +148,24 @@ def apply_displacement_map(base_img, design_pil, px, py):
 
     # Resize design to exactly match ROI (safety measure)
     design_pil = clipped_design.resize((actual_w, actual_h), Image.LANCZOS)
+    del clipped_design
 
     # Grayscale for displacement detection
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (21, 21), 0)
+    del gray
 
     # Displacement strength: -8 to +8 pixels
     disp = (blur.astype(np.float32) - 128) / 128.0 * 8
+    del blur
 
     design_np = np.array(design_pil).astype(np.float32)
+    del design_pil
 
     h, w = disp.shape
     map_x = np.tile(np.arange(w), (h, 1)).astype(np.float32) + disp
     map_y = np.tile(np.arange(h), (w, 1)).T.astype(np.float32) + disp
+    del disp
 
     map_x = np.clip(map_x, 0, w - 1)
     map_y = np.clip(map_y, 0, h - 1)
@@ -134,8 +175,10 @@ def apply_displacement_map(base_img, design_pil, px, py):
         warped = cv2.remap(design_np[:, :, c], map_x, map_y,
                            interpolation=cv2.INTER_LINEAR)
         warped_channels.append(warped)
+    del design_np, map_x, map_y
 
     warped_np = np.stack(warped_channels, axis=2).astype(np.uint8)
+    del warped_channels
     return Image.fromarray(warped_np, 'RGBA'), x1, y1
 
 
@@ -155,6 +198,7 @@ def blend_design_onto_base(base_img, design_pil, px, py):
     design_np = np.array(design_rgb.resize(
         (roi_np.shape[1], roi_np.shape[0]), Image.LANCZOS
     )).astype(np.float32)
+    del design_rgb, roi_pil
 
     # Multiply blend (fabric texture/shadows)
     multiplied = (design_np * roi_np / 255.0).astype(np.float32)
@@ -163,13 +207,16 @@ def blend_design_onto_base(base_img, design_pil, px, py):
     # 0.3 means 30% fabric texture, 70% original design color
     BLEND_STRENGTH = 0.3
     blended_np = ((1 - BLEND_STRENGTH) * design_np + BLEND_STRENGTH * multiplied).astype(np.uint8)
+    del design_np, roi_np, multiplied
 
     blended_pil = Image.fromarray(blended_np).convert('RGBA')
+    del blended_np
 
     # Resize alpha to match
     design_alpha = design_alpha.resize((blended_pil.width, blended_pil.height))
 
     base_pil.paste(blended_pil, (px, py), mask=design_alpha)
+    del blended_pil, design_alpha
     return base_pil
 
 
@@ -184,7 +231,9 @@ def process_and_save(customization_request, transform=None):
     result_filename = f'result_{customization_request.id}.png'
     result_path = os.path.join(settings.MEDIA_ROOT, 'results', result_filename)
     os.makedirs(os.path.dirname(result_path), exist_ok=True)
-    result_image.save(result_path)
+    result_image.save(result_path, optimize=True)
+    del result_image
+    gc.collect()
 
     customization_request.result_image = f'results/{result_filename}'
     customization_request.save()
