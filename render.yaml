@@ -22,9 +22,3 @@ services:
         fromDatabase:
           name: product-customizer-db
           property: connectionString
-      - key: MEDIA_ROOT
-        value: /var/data/media
-    disks:
-      - name: media
-        mountPath: /var/data/media
-        sizeGB: 1

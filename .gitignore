@@ -101,7 +101,7 @@ ENV/
 .mypy_cache/
 .ruff_cache/
 
-# Django generated/static artifacts
+# Django generated/static artifacts (keep media/product/ tracked for base images)
 media/designs/
 media/results/
 staticfiles/
