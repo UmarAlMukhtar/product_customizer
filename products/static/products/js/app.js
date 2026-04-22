@@ -47,6 +47,7 @@ const productColorInputs = document.querySelectorAll(
 const modalProductColorInputs = document.querySelectorAll(
   'input[name="modal-product-color"]',
 );
+const productFilter = document.getElementById("product-filter");
 
 // ===== STATE =====
 const state = {
@@ -71,10 +72,35 @@ async function init() {
     const data = await response.json();
     state.allProductViews = data.items;
     updateAddProductButtonState();
+    renderProductFilter();
   } catch (error) {
     console.error("Could not initialize product views:", error);
     updateAddProductButtonState();
   }
+}
+
+function renderProductFilter() {
+  productFilter.innerHTML = "";
+  const products = getUniqueProducts();
+  if (products.length === 0) return;
+
+  products.forEach((product) => {
+    const label = document.createElement("label");
+    label.className = "product-filter-label";
+    label.innerHTML = `
+      <input type="checkbox" name="product-filter-item" value="${product.product_id}" checked />
+      <span>${product.product_name}</span>
+    `;
+    productFilter.appendChild(label);
+  });
+
+  productFilter.classList.add("visible");
+}
+
+function getSelectedProductIds() {
+  return Array.from(
+    productFilter.querySelectorAll('input[name="product-filter-item"]:checked'),
+  ).map((input) => Number.parseInt(input.value, 10));
 }
 
 function setUploadLoading(
@@ -153,9 +179,16 @@ uploadForm.addEventListener("submit", async (e) => {
   setUploadLoading(true);
 
   try {
+    const selectedProductIds = getSelectedProductIds();
+    if (selectedProductIds.length === 0) {
+      setUploadLoading(false, "Select at least one product");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("design", state.designFile);
     formData.append("color", state.productColor);
+    formData.append("product_ids", selectedProductIds.join(","));
     formData.append("move_x", 0);
     formData.append("move_y", 0);
     formData.append("scale", 1);

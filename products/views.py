@@ -69,7 +69,18 @@ def generate_catalog(request):
     # Only generate the selected color variant.
     all_views = ProductView.objects.select_related('product').filter(
         color__iexact=requested_color,
-    ).order_by('product__name', 'angle')
+    )
+
+    # Optionally filter by specific product IDs (from the product filter checkboxes).
+    product_ids_raw = request.POST.get('product_ids', '').strip()
+    if product_ids_raw:
+        try:
+            product_ids = [int(pid) for pid in product_ids_raw.split(',') if pid.strip()]
+            all_views = all_views.filter(product_id__in=product_ids)
+        except ValueError:
+            pass  # ignore malformed input, generate all
+
+    all_views = all_views.order_by('product__name', 'angle')
     
     results = []
     for product_view in all_views:

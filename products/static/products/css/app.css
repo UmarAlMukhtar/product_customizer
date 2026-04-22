@@ -232,6 +232,67 @@ body {
     font-size: 0.9rem;
 }
 
+.product-filter {
+    display: none;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1.2rem;
+    justify-content: center;
+}
+
+.product-filter.visible {
+    display: flex;
+}
+
+.product-filter-label {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+}
+
+.product-filter-label input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.product-filter-label span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.88);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink);
+    transition: all 180ms ease;
+}
+
+.product-filter-label input:checked + span {
+    border-color: var(--accent);
+    background: rgba(239, 131, 84, 0.08);
+    box-shadow: 0 0 0 2px rgba(239, 131, 84, 0.12);
+}
+
+.product-filter-label input:not(:checked) + span {
+    opacity: 0.55;
+    text-decoration: line-through;
+}
+
+.product-filter-label span::before {
+    content: '✓';
+    font-size: 0.75rem;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
+.product-filter-label input:checked + span::before {
+    opacity: 1;
+}
+
 #upload-btn {
     width: 100%;
     margin-top: 1.5rem;
