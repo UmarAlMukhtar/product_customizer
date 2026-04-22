@@ -204,6 +204,7 @@ uploadForm.addEventListener("submit", async (e) => {
     const data = await response.json();
 
     state.customizations.clear();
+    const failedResults = [];
     data.results.forEach((result) => {
       if (result.success) {
         state.customizations.set(result.customization_request_id, {
@@ -219,8 +220,24 @@ uploadForm.addEventListener("submit", async (e) => {
           result_url: result.result_image_url,
           transforms: { move_x: 0, move_y: 0, scale: 1, rotation_deg: 0 },
         });
+      } else {
+        failedResults.push(result);
       }
     });
+
+    if (state.customizations.size === 0 && failedResults.length > 0) {
+      console.error("All products failed:", failedResults);
+      const firstError = failedResults[0].error || "Unknown error";
+      alert(
+        `Generation failed for all products.\n\nError: ${firstError}\n\nCheck that product base images exist on the server.`,
+      );
+      setUploadLoading(false, "Try Again");
+      return;
+    }
+
+    if (failedResults.length > 0) {
+      console.warn(`${failedResults.length} product(s) failed:`, failedResults);
+    }
 
     uploadStep.classList.remove("step-active");
     catalogStep.classList.add("step-active");

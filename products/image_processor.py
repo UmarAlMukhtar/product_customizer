@@ -31,7 +31,12 @@ def apply_design_to_product(product_view, design_image_path, transform=None):
     transform = transform or {}
 
     # Load base product image
-    base_img = cv2.imread(product_view.base_image.path)
+    base_path = product_view.base_image.path
+    base_img = cv2.imread(base_path)
+    if base_img is None:
+        raise FileNotFoundError(
+            f"Base image not found: {base_path} — re-upload the product image via the admin panel."
+        )
     original_h, original_w = base_img.shape[:2]
     base_img = _downscale_cv(base_img)
     base_h, base_w = base_img.shape[:2]
