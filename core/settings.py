@@ -168,3 +168,6 @@ if not DEBUG:
 
 # External APIs
 FREEIMAGE_API_KEY = os.getenv('FREEIMAGE_API_KEY')
+
+# Processing
+MAX_PARALLEL_GENERATIONS = int(os.getenv('MAX_PARALLEL_GENERATIONS', 2))

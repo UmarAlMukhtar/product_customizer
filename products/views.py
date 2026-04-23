@@ -142,9 +142,10 @@ def generate_catalog(request):
             }
 
     def event_stream():
+        from django.conf import settings
         yield json.dumps({"status": "start", "total": total_views}) + "\n"
         
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        with ThreadPoolExecutor(max_workers=settings.MAX_PARALLEL_GENERATIONS) as executor:
             future_to_view = {executor.submit(process_single_view, view): view for view in all_views}
             completed = 0
             for future in as_completed(future_to_view):
