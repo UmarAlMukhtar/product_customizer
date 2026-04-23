@@ -30,8 +30,10 @@ class ProductView(models.Model):
     
 class CustomizationRequest(models.Model):
     product_view = models.ForeignKey(ProductView, on_delete=models.CASCADE)
-    user_design = models.ImageField(upload_to='designs/')
+    user_design = models.ImageField(upload_to='designs/', null=True, blank=True)
+    user_design_url = models.URLField(max_length=500, null=True, blank=True)
     result_image = models.ImageField(upload_to='results/', null=True, blank=True)
+    result_image_url = models.URLField(max_length=500, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

@@ -7,3 +7,4 @@ psycopg2-binary>=2.9,<3
 Pillow>=11,<12
 opencv-python-headless>=4.10,<5
 numpy>=2.1,<3
+python-dotenv>=1.0.0

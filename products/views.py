@@ -55,6 +55,14 @@ def generate_catalog(request):
     if not design_file:
         return JsonResponse({'error': 'design file is required'}, status=400)
 
+    try:
+        from .image_processor import upload_to_freeimage
+        design_url = upload_to_freeimage(design_file.read(), design_file.name)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'Failed to upload design to Freeimage: {str(e)}'}, status=500)
+
     requested_color = (request.POST.get('color') or '#ffffff').strip().lower()
     if requested_color not in {'#ffffff', '#000000'}:
         requested_color = '#ffffff'
@@ -80,21 +88,25 @@ def generate_catalog(request):
         except ValueError:
             pass  # ignore malformed input, generate all
 
-    all_views = all_views.order_by('product__name', 'angle')
+    all_views = list(all_views.order_by('product__name', 'angle'))
+    total_views = len(all_views)
     
-    results = []
-    for product_view in all_views:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from django.http import StreamingHttpResponse
+    import json
+
+    def process_single_view(product_view):
         try:
             # Create customization request
             req = CustomizationRequest.objects.create(
                 product_view=product_view,
-                user_design=design_file
+                user_design_url=design_url
             )
             
             # Process the image
             process_and_save(req, transform=transform)
             
-            results.append({
+            return {
                 'customization_request_id': req.id,
                 'product_view_id': product_view.id,
                 'product_name': product_view.product.name,
@@ -107,11 +119,13 @@ def generate_catalog(request):
                     'width': product_view.print_area_width,
                     'height': product_view.print_area_height,
                 },
-                'result_image_url': req.result_image.url,
+                'result_image_url': req.result_image_url or (req.result_image.url if req.result_image else ''),
                 'success': True
-            })
+            }
         except Exception as e:
-            results.append({
+            import traceback
+            traceback.print_exc()
+            return {
                 'product_view_id': product_view.id,
                 'product_name': product_view.product.name,
                 'angle': product_view.angle,
@@ -125,14 +139,25 @@ def generate_catalog(request):
                 },
                 'success': False,
                 'error': str(e)
-            })
+            }
 
-    return JsonResponse({
-        'success': True,
-        'color': requested_color,
-        'results': results,
-        'total': len(results)
-    })
+    def event_stream():
+        yield json.dumps({"status": "start", "total": total_views}) + "\n"
+        
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_view = {executor.submit(process_single_view, view): view for view in all_views}
+            completed = 0
+            for future in as_completed(future_to_view):
+                completed += 1
+                result = future.result()
+                yield json.dumps({
+                    "status": "progress", 
+                    "completed": completed, 
+                    "total": total_views, 
+                    "result": result
+                }) + "\n"
+                
+    return StreamingHttpResponse(event_stream(), content_type='application/x-ndjson')
 
 @csrf_exempt
 def customize(request):
@@ -157,10 +182,18 @@ def customize(request):
         'rotation_deg': _parse_float(request.POST.get('rotation_deg'), 0.0),
     }
 
+    try:
+        from .image_processor import upload_to_freeimage
+        design_url = upload_to_freeimage(design_file.read(), design_file.name)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'Failed to upload design to Freeimage: {str(e)}'}, status=500)
+
     # Save the customization request
     req = CustomizationRequest.objects.create(
         product_view=product_view,
-        user_design=design_file
+        user_design_url=design_url
     )
 
     # Process the image
@@ -168,7 +201,7 @@ def customize(request):
 
     return JsonResponse({
         'success': True,
-        'result_image_url': req.result_image.url,
+        'result_image_url': req.result_image_url or (req.result_image.url if req.result_image else ''),
         'request_id': req.id
     })
 
@@ -182,18 +215,29 @@ def download_customization(request, request_id):
     except CustomizationRequest.DoesNotExist:
         return JsonResponse({'error': 'Customization not found'}, status=404)
 
-    if not customization.result_image:
+    image_url = customization.result_image_url or (customization.result_image.url if customization.result_image else None)
+    if not image_url:
         return JsonResponse({'error': 'Result image not ready'}, status=400)
 
     filename = f"{customization.product_view.product.name}_{customization.product_view.angle}.png"
 
-    # FileResponse accepts an open file and closes it automatically.
-    response = FileResponse(
-        open(customization.result_image.path, 'rb'),
-        content_type='image/png',
-    )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
-    return response
+    if image_url.startswith('http://') or image_url.startswith('https://'):
+        import requests
+        resp = requests.get(image_url)
+        if resp.status_code == 200:
+            response = FileResponse(io.BytesIO(resp.content), content_type='image/png')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        else:
+            return JsonResponse({'error': 'Failed to fetch result image'}, status=500)
+    else:
+        # FileResponse accepts an open file and closes it automatically.
+        response = FileResponse(
+            open(customization.result_image.path, 'rb'),
+            content_type='image/png',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 @csrf_exempt
@@ -223,10 +267,17 @@ def download_batch(request):
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         for customization in customizations:
-            if customization.result_image:
-                file_path = customization.result_image.path
+            image_url = customization.result_image_url or (customization.result_image.url if customization.result_image else None)
+            if image_url:
                 filename = f"{customization.product_view.product.name}_{customization.product_view.angle}.png"
-                zip_file.write(file_path, arcname=filename)
+                if image_url.startswith('http://') or image_url.startswith('https://'):
+                    import requests
+                    resp = requests.get(image_url)
+                    if resp.status_code == 200:
+                        zip_file.writestr(filename, resp.content)
+                else:
+                    file_path = customization.result_image.path
+                    zip_file.write(file_path, arcname=filename)
 
     zip_buffer.seek(0)
     response = FileResponse(zip_buffer, content_type='application/zip')
@@ -278,11 +329,14 @@ def edit_customization(request, request_id):
     # Reprocess with new transforms
     process_and_save(customization, transform=transform)
 
-    cache_busted_url = customization.result_image.url
-    try:
-        cache_busted_url = f"{cache_busted_url}?v={int(os.path.getmtime(customization.result_image.path))}"
-    except (OSError, ValueError):
-        pass
+    cache_busted_url = customization.result_image_url or (customization.result_image.url if customization.result_image else '')
+    
+    # Cache busting for local files, not needed for unique freeimage host urls
+    if not cache_busted_url.startswith('http://') and not cache_busted_url.startswith('https://'):
+        try:
+            cache_busted_url = f"{cache_busted_url}?v={int(os.path.getmtime(customization.result_image.path))}"
+        except (OSError, ValueError):
+            pass
 
     return JsonResponse({
         'success': True,

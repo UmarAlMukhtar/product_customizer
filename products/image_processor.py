@@ -3,6 +3,8 @@ import numpy as np
 from PIL import Image
 import os
 import gc
+import requests
+import io
 
 # Maximum pixel dimension for any image loaded into memory.
 # Keeps peak RAM well under Render's 512 MB free-tier limit.
@@ -31,18 +33,32 @@ def apply_design_to_product(product_view, design_image_path, transform=None):
     transform = transform or {}
 
     # Load base product image
-    base_path = product_view.base_image.path
-    base_img = cv2.imread(base_path)
+    base_name = product_view.base_image.name
+    if base_name.startswith('http://') or base_name.startswith('https://'):
+        import requests
+        resp = requests.get(base_name)
+        resp.raise_for_status()
+        image_array = np.asarray(bytearray(resp.content), dtype=np.uint8)
+        base_img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+    else:
+        base_path = product_view.base_image.path
+        base_img = cv2.imread(base_path)
+
     if base_img is None:
         raise FileNotFoundError(
-            f"Base image not found: {base_path} — re-upload the product image via the admin panel."
+            f"Base image not found — re-upload the product image via the admin panel."
         )
     original_h, original_w = base_img.shape[:2]
     base_img = _downscale_cv(base_img)
     base_h, base_w = base_img.shape[:2]
 
     # Load user design
-    design = Image.open(design_image_path).convert('RGBA')
+    if design_image_path.startswith('http://') or design_image_path.startswith('https://'):
+        resp = requests.get(design_image_path)
+        resp.raise_for_status()
+        design = Image.open(io.BytesIO(resp.content)).convert('RGBA')
+    else:
+        design = Image.open(design_image_path).convert('RGBA')
     design = _downscale(design)
 
     # ✅ Auto-remove white background
@@ -225,22 +241,50 @@ def blend_design_onto_base(base_img, design_pil, px, py):
     return base_pil
 
 
-def process_and_save(customization_request, transform=None):
+def upload_to_freeimage(image_bytes, filename="image.png"):
     from django.conf import settings
+    url = "https://freeimage.host/api/1/upload"
+    payload = {
+        "key": settings.FREEIMAGE_API_KEY,
+        "action": "upload",
+        "format": "json"
+    }
+    files = {
+        "source": (filename, image_bytes, "image/png")
+    }
+    response = requests.post(url, data=payload, files=files)
+    response.raise_for_status()
+    data = response.json()
+    if data.get("status_code") == 200:
+        return data["image"]["url"]
+    else:
+        raise Exception(f"Freeimage upload failed: {data}")
 
+
+def process_and_save(customization_request, transform=None):
     product_view = customization_request.product_view
-    design_path = customization_request.user_design.path
+    
+    if customization_request.user_design_url:
+        design_path = customization_request.user_design_url
+    else:
+        design_path = customization_request.user_design.path
 
     result_image = apply_design_to_product(product_view, design_path, transform=transform)
 
+    # Save to BytesIO instead of local file
+    buffer = io.BytesIO()
+    result_image.save(buffer, format='PNG', optimize=True)
+    buffer.seek(0)
+    
     result_filename = f'result_{customization_request.id}.png'
-    result_path = os.path.join(settings.MEDIA_ROOT, 'results', result_filename)
-    os.makedirs(os.path.dirname(result_path), exist_ok=True)
-    result_image.save(result_path, optimize=True)
+    
+    # Upload to Freeimage
+    result_url = upload_to_freeimage(buffer.read(), result_filename)
+    
     del result_image
     gc.collect()
 
-    customization_request.result_image = f'results/{result_filename}'
-    customization_request.save()
+    customization_request.result_image_url = result_url
+    customization_request.save(update_fields=['result_image_url'])
 
-    return result_path
+    return result_url

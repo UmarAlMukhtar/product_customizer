@@ -84,11 +84,12 @@ function renderProductFilter() {
   const products = getUniqueProducts();
   if (products.length === 0) return;
 
-  products.forEach((product) => {
+  products.forEach((product, index) => {
+    const isChecked = index < 3 ? "checked" : "";
     const label = document.createElement("label");
     label.className = "product-filter-label";
     label.innerHTML = `
-      <input type="checkbox" name="product-filter-item" value="${product.product_id}" checked />
+      <input type="checkbox" name="product-filter-item" value="${product.product_id}" ${isChecked} />
       <span>${product.product_name}</span>
     `;
     productFilter.appendChild(label);
@@ -160,15 +161,20 @@ productColorInputs.forEach((input) => {
 
 function handleDesignSelected() {
   const file = designInput.files[0];
+  const h2 = uploadZone.querySelector("h2");
   if (file && file.type.startsWith("image/")) {
     state.designFile = file;
     state.designUrl = URL.createObjectURL(file);
     setUploadLoading(false, "Generate Catalog");
     updateAddProductButtonState();
+    if (h2) h2.textContent = `Selected: ${file.name}`;
+    uploadZone.classList.add("has-file");
   } else {
     uploadBtn.disabled = true;
     uploadBtn.textContent = "Select a design to generate";
     updateAddProductButtonState();
+    if (h2) h2.textContent = `Drop your design here or click to browse`;
+    uploadZone.classList.remove("has-file");
   }
 }
 
@@ -201,29 +207,50 @@ uploadForm.addEventListener("submit", async (e) => {
 
     if (!response.ok) throw new Error("Generation failed");
 
-    const data = await response.json();
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
 
     state.customizations.clear();
     const failedResults = [];
-    data.results.forEach((result) => {
-      if (result.success) {
-        state.customizations.set(result.customization_request_id, {
-          productView: {
-            id: result.product_view_id,
-            name: result.product_name,
-            angle: result.angle,
-            color: result.color,
-            base_image_url: result.base_image_url,
-          },
-          printArea: result.print_area,
-          request_id: result.customization_request_id,
-          result_url: result.result_image_url,
-          transforms: { move_x: 0, move_y: 0, scale: 1, rotation_deg: 0 },
-        });
-      } else {
-        failedResults.push(result);
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep the last incomplete line
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const data = JSON.parse(line);
+
+        if (data.status === "start") {
+          uploadBtn.textContent = `Generating... 0/${data.total}`;
+        } else if (data.status === "progress") {
+          uploadBtn.textContent = `Generating... ${data.completed}/${data.total}`;
+          const result = data.result;
+          if (result.success) {
+            state.customizations.set(result.customization_request_id, {
+              productView: {
+                id: result.product_view_id,
+                name: result.product_name,
+                angle: result.angle,
+                color: result.color,
+                base_image_url: result.base_image_url,
+              },
+              printArea: result.print_area,
+              request_id: result.customization_request_id,
+              result_url: result.result_image_url,
+              transforms: { move_x: 0, move_y: 0, scale: 1, rotation_deg: 0 },
+            });
+          } else {
+            failedResults.push(result);
+          }
+        }
       }
-    });
+    }
 
     if (state.customizations.size === 0 && failedResults.length > 0) {
       console.error("All products failed:", failedResults);
@@ -245,8 +272,6 @@ uploadForm.addEventListener("submit", async (e) => {
     renderCatalog();
   } catch (error) {
     console.error("Error:", error);
-    // FIX #3: Re-enable the button on failure so the user can actually try again.
-    // Previously the button stayed disabled forever after an error.
     setUploadLoading(false, "Try Again");
   }
 });
@@ -901,6 +926,9 @@ backBtn.addEventListener("click", () => {
   });
   setUploadLoading(false);
   updateAddProductButtonState();
+  const h2 = uploadZone.querySelector("h2");
+  if (h2) h2.textContent = `Drop your design here or click to browse`;
+  uploadZone.classList.remove("has-file");
 });
 
 init();
