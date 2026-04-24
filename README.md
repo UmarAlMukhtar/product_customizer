@@ -128,7 +128,7 @@ This project is pre-configured for **Render** with a `render.yaml` Blueprint.
 | `MEDIA_ROOT` | `/var/data/media` (persistent disk mount) |
 | `PYTHON_VERSION` | `3.13.5` |
 | `FREEIMAGE_API_KEY` | Freeimage.host API key for offloading image storage |
-| `MAX_PARALLEL_GENERATIONS` | Limit concurrent processing tasks to save memory (default: `3`) |
+| `MAX_PARALLEL_GENERATIONS` | Limit concurrent processing tasks to save memory (default: `1`) |
 
 ### Manual Deploy (if not using Blueprint)
 

@@ -8,7 +8,7 @@ services:
     env: python
     plan: free
     buildCommand: "./build.sh"
-    startCommand: gunicorn core.wsgi:application --preload --max-requests 200 --max-requests-jitter 30
+    startCommand: gunicorn core.wsgi:application --preload --max-requests 200 --max-requests-jitter 30 --timeout 120
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
@@ -25,4 +25,4 @@ services:
       - key: FREEIMAGE_API_KEY
         value: 6d207e02198a847aa98d0a2a901485a5
       - key: MAX_PARALLEL_GENERATIONS
-        value: '3'
+        value: '1'
